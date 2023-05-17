@@ -22,23 +22,24 @@ impl ScatterPlot {
     }
 
     pub fn auto_refresh(&mut self) -> thread::JoinHandle<()> {
+        use std::time::Duration;
+
         const REFRESH_RATE_HZ: u64 = 120;
+        const REFRESH_PERIOD: Duration = Duration::from_millis(1000 / REFRESH_RATE_HZ);
 
         let points_clone = Arc::clone(&self.0);
 
         thread::spawn(move || loop {
             let points = points_clone.lock();
-
             Canvas::refresh(&points);
 
             drop(points); // drop lock in order to prevent holding lock while waiting
-            thread::sleep(std::time::Duration::from_millis(1000 / REFRESH_RATE_HZ));
+            thread::sleep(REFRESH_PERIOD);
         })
     }
 
     pub fn refresh(&mut self) {
         let points = self.0.lock();
-
         Canvas::refresh(&points);
     }
 
@@ -50,11 +51,9 @@ impl ScatterPlot {
     pub fn add_stream(&mut self, rx: Receiver<Point>) -> thread::JoinHandle<()> {
         let points_clone = Arc::clone(&self.0);
 
-        thread::spawn(move || loop {
-            let mut points = points_clone.lock();
-
-            if let Ok(point) = rx.recv() {
-                points.push(point);
+        thread::spawn(move || {
+            for point in rx {
+                points_clone.lock().push(point);
             }
         })
     }
