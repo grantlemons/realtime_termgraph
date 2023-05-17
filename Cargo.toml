@@ -1,0 +1,10 @@
+[package]
+name = "livetermgraph"
+version = "0.1.0"
+edition = "2021"
+authors = ["Grant Lemons <grantlemons@aol.com>"]
+publish = false
+
+[dependencies]
+crossterm = "0.26.1"
+parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
