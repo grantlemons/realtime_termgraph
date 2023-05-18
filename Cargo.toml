@@ -1,9 +1,8 @@
 [package]
-name = "livetermgraph"
+name = "rt_termgraph"
 version = "0.1.0"
 edition = "2021"
 authors = ["Grant Lemons <grantlemons@aol.com>"]
-publish = false
 
 [dependencies]
 crossterm = "0.26.1"
