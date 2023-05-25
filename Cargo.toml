@@ -6,4 +6,5 @@ authors = ["Grant Lemons <grantlemons@aol.com>"]
 
 [dependencies]
 crossterm = "0.26.1"
+map-range = "0.1.1"
 parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
