@@ -1,8 +1,5 @@
 use parking_lot::Mutex;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
-use std::thread;
 
 use super::Canvas;
 use super::Point;
@@ -11,7 +8,7 @@ use super::Point;
 pub struct ScatterPlot {
     points: Arc<Mutex<Vec<Point>>>,
     canvas: Arc<Canvas>,
-    streams: Arc<Mutex<Vec<Receiver<Point>>>>,
+    callback: Option<fn(&Self)>,
 }
 
 impl ScatterPlot {
@@ -22,92 +19,55 @@ impl ScatterPlot {
         }
     }
 
-    pub fn new_with_stream(canvas: Canvas, rx: Receiver<Point>) -> (Self, thread::JoinHandle<()>) {
-        let mut plot = Self::new(canvas);
-        plot.add_stream(rx);
+    pub fn new_with_callback(canvas: Canvas, func: fn(&Self)) -> Self {
+        Self {
+            callback: Some(func),
+            ..Self::new(canvas)
+        }
+    }
 
-        let refresh_handle = plot.auto_refresh();
-        (plot, refresh_handle)
+    pub fn points(&self) -> Vec<Point> {
+        self.points.lock().clone()
     }
 
     pub fn add_point(&mut self, point: Point) {
         self.points.lock().push(point);
-    }
+        self.canvas.plot_point(&point);
 
-    pub fn add_stream(&mut self, rx: Receiver<Point>) {
-        self.streams.lock().push(rx);
+        if let Some(callback) = self.callback {
+            callback(self);
+        }
     }
 
     pub fn extend(&mut self, new_points: &[Point]) {
         self.points.lock().extend(new_points.to_owned());
-    }
+        self.canvas.plot_points(new_points);
 
-    pub fn update(&mut self) {
-        let mut points = self.points.lock();
-
-        for stream in self.streams.lock().iter() {
-            for point in stream.try_iter() {
-                points.push(point);
-            }
+        if let Some(callback) = self.callback {
+            callback(self);
         }
-
-        self.refresh();
     }
 
     pub fn refresh(&self) {
         let points = self.points.lock();
-        self.canvas.update(&points);
-    }
-
-    pub fn auto_refresh(&self) -> thread::JoinHandle<()> {
-        use std::time::Duration;
-
-        const REFRESH_RATE_HZ: u64 = 500;
-        const REFRESH_PERIOD: Duration = Duration::from_millis(1000 / REFRESH_RATE_HZ);
-
-        let points_clone = Arc::clone(&self.points);
-        let canvas_clone = Arc::clone(&self.canvas);
-        let streams_clone = Arc::clone(&self.streams);
-        let mut last_count = 0;
-
-        thread::spawn(move || 'outer: loop {
-            let mut points = points_clone.lock();
-
-            for stream in streams_clone.lock().iter() {
-                for point in stream.try_iter() {
-                    points.push(point);
-                }
-                if let Some(mpsc::TryRecvError::Disconnected) = stream.try_recv().err() {
-                    break 'outer;
-                }
-            }
-
-            let len = points.len();
-            if points.len() != last_count {
-                last_count = len;
-                canvas_clone.update(&points);
-            }
-
-            drop(points); // drop lock in order to prevent holding lock while waiting
-            thread::sleep(REFRESH_PERIOD);
-        })
+        self.canvas.plot_points(&points);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::canvas::Canvas;
+    // use crate::canvas::Canvas;
 
     #[allow(unused_imports)]
     use super::*;
 
-    #[test]
-    fn test_stream() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        ScatterPlot::new_with_stream(Canvas::default(), rx);
-
-        for (x, y) in [(534, 234), (5423, 9856), (243342, 443), (2321, 43534)] {
-            tx.send(Point::new(x as f32, y as f32)).unwrap();
-        }
-    }
+    // #[test]
+    // fn test_stream() {
+    //     let (tx, rx) = std::sync::mpsc::channel();
+    //     ScatterPlot::new_with_stream(Canvas::default(), rx);
+    //
+    //     for (x, y) in [(534, 234), (5423, 9856), (243342, 443), (2321, 43534)] {
+    //         tx.send(Point::new(x as f32, y as f32)).unwrap();
+    //     }
+    // }
 }

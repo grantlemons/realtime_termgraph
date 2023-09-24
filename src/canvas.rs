@@ -101,7 +101,7 @@ impl Canvas {
         self.x_bounds(x_bounds).y_bounds(y_bounds)
     }
 
-    pub fn update(&self, points: &[Point]) {
+    pub fn plot_points(&self, points: &[Point]) {
         for point in points {
             self.plot_point(point);
         }
@@ -113,9 +113,9 @@ impl Canvas {
         }
     }
 
-    pub fn map_point(&self, point: &Point) -> Option<(u16, u16)> {
-        let (x, y) = point.into();
-        if self.x_bounds.contains(&x) && self.y_bounds.contains(&y) {
+    fn map_point(&self, point: &Point) -> Option<(u16, u16)> {
+        let (x, y) = point;
+        if self.x_bounds.contains(x) && self.y_bounds.contains(y) {
             let (xs, xe) = (self.x_bounds.start(), self.x_bounds.end());
             let (ys, ye) = (self.y_bounds.start(), self.y_bounds.end());
 
@@ -132,11 +132,11 @@ impl Canvas {
         self.start_row + self.dimensions.1 - 1
     }
 
-    pub fn go_to_exit_pos(&self) {
+    fn go_to_exit_pos(&self) {
         crossterm::execute!(stdout(), cursor::MoveTo(0, self.final_row() + 4)).unwrap();
     }
 
-    pub fn clear_rows(count: u16) {
+    fn clear_rows(count: u16) {
         (0..count).for_each(|_| println!());
     }
 
@@ -153,32 +153,18 @@ impl Canvas {
         self.go_to_exit_pos();
     }
 
-    pub fn write_to_row(&self, row: u16, text: &str) {
+    fn write_to_row(&self, row: u16, text: &str) {
         write_to_row(self.start_row + row, text).unwrap();
         self.go_to_exit_pos();
     }
 
-    pub fn char_at_position(&self, row: u16, column: u16, char: char) {
+    fn char_at_position(&self, row: u16, column: u16, char: char) {
         char_at_position(self.start_row + row + 1, column + 1, char).unwrap();
         self.go_to_exit_pos();
     }
 }
 
-pub fn clear_row(row: u16) -> Result<(), std::io::Error> {
-    let mut stdout = stdout();
-    stdout.execute(cursor::Hide)?;
-
-    stdout.queue(cursor::SavePosition)?;
-    stdout.queue(cursor::MoveToRow(row))?;
-
-    stdout.queue(Clear(ClearType::CurrentLine))?;
-
-    stdout.flush()?;
-
-    Ok(())
-}
-
-pub fn write_to_row(row: u16, text: &str) -> Result<(), std::io::Error> {
+fn write_to_row(row: u16, text: &str) -> Result<(), std::io::Error> {
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
 
@@ -192,7 +178,7 @@ pub fn write_to_row(row: u16, text: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn char_at_position(row: u16, column: u16, char: char) -> Result<(), std::io::Error> {
+fn char_at_position(row: u16, column: u16, char: char) -> Result<(), std::io::Error> {
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
 
@@ -209,7 +195,6 @@ pub fn char_at_position(row: u16, column: u16, char: char) -> Result<(), std::io
 mod tests {
     #[allow(unused_imports)]
     use super::*;
-    use crate::Point;
 
     #[test]
     fn test_write() -> Result<(), std::io::Error> {
@@ -224,11 +209,11 @@ mod tests {
     fn test_map_point_default() {
         let canvas: Canvas = Canvas::default();
         let expected_maps = [
-            (Point::new(0.0, 0.0), (10, 5)),
-            (Point::new(-10.0, 0.0), (0, 5)),
-            (Point::new(10.0, 0.0), (20, 5)),
-            (Point::new(-10.0, 10.0), (0, 0)),
-            (Point::new(10.0, -10.0), (20, 10)),
+            ((0.0, 0.0), (10, 5)),
+            ((-10.0, 0.0), (0, 5)),
+            ((10.0, 0.0), (20, 5)),
+            ((-10.0, 10.0), (0, 0)),
+            ((10.0, -10.0), (20, 10)),
         ];
 
         for (point, map) in expected_maps {
@@ -240,11 +225,11 @@ mod tests {
     fn test_map_point_dimensions() {
         let canvas: Canvas = Canvas::new(40, 10);
         let expected_maps = [
-            (Point::new(0.0, 0.0), (20, 5)),
-            (Point::new(-10.0, 0.0), (0, 5)),
-            (Point::new(10.0, 0.0), (40, 5)),
-            (Point::new(-10.0, 10.0), (0, 0)),
-            (Point::new(10.0, -10.0), (40, 10)),
+            ((0.0, 0.0), (20, 5)),
+            ((-10.0, 0.0), (0, 5)),
+            ((10.0, 0.0), (40, 5)),
+            ((-10.0, 10.0), (0, 0)),
+            ((10.0, -10.0), (40, 10)),
         ];
 
         for (point, map) in expected_maps {
@@ -255,10 +240,7 @@ mod tests {
     #[test]
     fn test_map_point_range() {
         let canvas = Canvas::custom(20, 10, 0.0..=40.0, 0.0..=20.0, '+', '#');
-        let expected_maps = [
-            (Point::new(0.0, 10.0), (0, 5)),
-            (Point::new(10.0, 0.0), (5, 10)),
-        ];
+        let expected_maps = [((0.0, 10.0), (0, 5)), ((10.0, 0.0), (5, 10))];
 
         for (point, map) in expected_maps {
             assert_eq!(canvas.map_point(&point), Some(map));
