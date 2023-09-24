@@ -19,6 +19,13 @@ impl ScatterPlot {
         }
     }
 
+    pub fn new_with_points(canvas: Canvas, points: Vec<Point>) -> Self {
+        Self {
+            points: Arc::new(Mutex::new(points)),
+            ..Self::new(canvas)
+        }
+    }
+
     pub fn new_with_callback(canvas: Canvas, func: fn(&Self)) -> Self {
         Self {
             callback: Some(func),
