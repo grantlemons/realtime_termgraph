@@ -12,63 +12,14 @@ use std::{
 
 use super::Point;
 
-pub struct CanvasBuilder {
-    dimensions: (u16, u16),
-    x_bounds: Option<RangeInclusive<f32>>,
-    y_bounds: Option<RangeInclusive<f32>>,
-}
-
-impl Default for CanvasBuilder {
-    fn default() -> Self {
-        Self {
-            dimensions: (20, 10),
-            x_bounds: None,
-            y_bounds: None,
-        }
-    }
-}
-
-impl CanvasBuilder {
-    pub fn new(width: u16, height: u16) -> Self {
-        Self {
-            dimensions: (width, height),
-            ..Self::default()
-        }
-    }
-
-    pub fn build(self) -> Option<Canvas> {
-        if let (Some(x_bounds), Some(y_bounds)) = (self.x_bounds, self.y_bounds) {
-            Some(Canvas {
-                dimensions: self.dimensions,
-                x_bounds,
-                y_bounds,
-                ..Canvas::default()
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn x_bounds(self, bounds: RangeInclusive<f32>) -> Self {
-        Self {
-            x_bounds: Some(bounds),
-            ..self
-        }
-    }
-
-    pub fn y_bounds(self, bounds: RangeInclusive<f32>) -> Self {
-        Self {
-            y_bounds: Some(bounds),
-            ..self
-        }
-    }
-}
-
+#[derive(Clone)]
 pub struct Canvas {
     dimensions: (u16, u16),
     x_bounds: RangeInclusive<f32>,
     y_bounds: RangeInclusive<f32>,
     start_row: u16,
+    marker: char,
+    border_char: char,
 }
 
 impl Default for Canvas {
@@ -78,29 +29,76 @@ impl Default for Canvas {
             x_bounds: -10.0..=10.0,
             y_bounds: -10.0..=10.0,
             start_row: cursor::position().unwrap_or((0, 0)).1,
+            marker: '.',
+            border_char: '#',
         }
     }
 }
 
+impl Drop for Canvas {
+    fn drop(&mut self) {
+        self.go_to_exit_pos();
+        crossterm::execute!(stdout(), cursor::Show).unwrap();
+    }
+}
+
 impl Canvas {
-    pub fn new(width: u16, height: u16) -> Self {
+    pub fn new(rows: u16, columns: u16) -> Self {
         Self {
-            dimensions: (width, height),
+            dimensions: (rows, columns),
+            x_bounds: -10.0..=10.0,
+            y_bounds: -10.0..=10.0,
             ..Self::default()
         }
+        .init()
     }
 
-    pub fn x_bounds(&mut self, bounds: RangeInclusive<f32>) {
+    pub fn custom(
+        rows: u16,
+        columns: u16,
+        x_bounds: RangeInclusive<f32>,
+        y_bounds: RangeInclusive<f32>,
+        marker: char,
+        border_char: char,
+    ) -> Self {
+        Self {
+            dimensions: (rows, columns),
+            x_bounds,
+            y_bounds,
+            marker,
+            border_char,
+            ..Self::default()
+        }
+        .init()
+    }
+
+    pub fn init(mut self) -> Self {
+        Self::clear_rows(self.dimensions.1 + 4);
+        crossterm::execute!(stdout(), cursor::MoveUp(self.dimensions.1 + 4)).unwrap();
+        self.start_row = cursor::position().unwrap_or((0, 0)).1;
+        self.print_border();
+
+        self
+    }
+
+    pub fn style(mut self, marker: char, border_char: char) -> Self {
+        self.marker = marker;
+        self.border_char = border_char;
+        self
+    }
+
+    pub fn x_bounds(mut self, bounds: RangeInclusive<f32>) -> Self {
         self.x_bounds = bounds;
+        self
     }
 
-    pub fn y_bounds(&mut self, bounds: RangeInclusive<f32>) {
+    pub fn y_bounds(mut self, bounds: RangeInclusive<f32>) -> Self {
         self.y_bounds = bounds;
+        self
     }
 
-    pub fn bounds(&mut self, x_bounds: RangeInclusive<f32>, y_bounds: RangeInclusive<f32>) {
-        self.x_bounds = x_bounds;
-        self.y_bounds = y_bounds;
+    pub fn bounds(self, x_bounds: RangeInclusive<f32>, y_bounds: RangeInclusive<f32>) -> Self {
+        self.x_bounds(x_bounds).y_bounds(y_bounds)
     }
 
     pub fn update(&self, points: &[Point]) {
@@ -111,7 +109,7 @@ impl Canvas {
 
     pub fn plot_point(&self, point: &Point) {
         if let Some((x, y)) = self.map_point(point) {
-            char_at_position(self.start_row + y, x, '·').unwrap();
+            self.char_at_position(y, x, self.marker);
         }
     }
 
@@ -129,21 +127,67 @@ impl Canvas {
 
         None
     }
+
+    fn final_row(&self) -> u16 {
+        self.start_row + self.dimensions.1 - 1
+    }
+
+    pub fn go_to_exit_pos(&self) {
+        crossterm::execute!(stdout(), cursor::MoveTo(0, self.final_row() + 4)).unwrap();
+    }
+
+    pub fn clear_rows(count: u16) {
+        (0..count).for_each(|_| println!());
+    }
+
+    pub fn print_border(&self) {
+        let border_text = (0..=self.dimensions.0 + 2).map(|_| '#').collect::<String>();
+
+        self.write_to_row(0, &border_text);
+        self.write_to_row(self.dimensions.1 + 2, &border_text);
+
+        for row in 1..=self.dimensions.1 + 1 {
+            char_at_position(self.start_row + row, 0, self.border_char).unwrap();
+            char_at_position(self.start_row + row, self.dimensions.0 + 2, '#').unwrap();
+        }
+        self.go_to_exit_pos();
+    }
+
+    pub fn write_to_row(&self, row: u16, text: &str) {
+        write_to_row(self.start_row + row, text).unwrap();
+        self.go_to_exit_pos();
+    }
+
+    pub fn char_at_position(&self, row: u16, column: u16, char: char) {
+        char_at_position(self.start_row + row + 1, column + 1, char).unwrap();
+        self.go_to_exit_pos();
+    }
+}
+
+pub fn clear_row(row: u16) -> Result<(), std::io::Error> {
+    let mut stdout = stdout();
+    stdout.execute(cursor::Hide)?;
+
+    stdout.queue(cursor::SavePosition)?;
+    stdout.queue(cursor::MoveToRow(row))?;
+
+    stdout.queue(Clear(ClearType::CurrentLine))?;
+
+    stdout.flush()?;
+
+    Ok(())
 }
 
 pub fn write_to_row(row: u16, text: &str) -> Result<(), std::io::Error> {
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
 
-    stdout.queue(cursor::SavePosition)?;
     stdout.queue(cursor::MoveTo(0, row))?;
 
     stdout.queue(Clear(ClearType::CurrentLine))?;
     stdout.write_all(text.as_bytes())?;
 
     stdout.flush()?;
-
-    stdout.execute(cursor::Show)?;
 
     Ok(())
 }
@@ -152,14 +196,11 @@ pub fn char_at_position(row: u16, column: u16, char: char) -> Result<(), std::io
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
 
-    stdout.queue(cursor::SavePosition)?;
     stdout.queue(cursor::MoveTo(column, row))?;
 
-    stdout.write_all(&[char as u8])?;
+    stdout.write(&[char as u8])?;
 
     stdout.flush()?;
-
-    stdout.execute(cursor::Show)?;
 
     Ok(())
 }
@@ -170,7 +211,6 @@ mod tests {
     use super::*;
     use crate::Point;
 
-    #[ignore]
     #[test]
     fn test_write() -> Result<(), std::io::Error> {
         let text: &str = "Hello from Grant!";
@@ -214,11 +254,7 @@ mod tests {
 
     #[test]
     fn test_map_point_range() {
-        let canvas: Canvas = CanvasBuilder::default()
-            .x_bounds(0.0..=40.0)
-            .y_bounds(0.0..=20.0)
-            .build()
-            .unwrap();
+        let canvas = Canvas::custom(20, 10, 0.0..=40.0, 0.0..=20.0, '+', '#');
         let expected_maps = [
             (Point::new(0.0, 10.0), (0, 5)),
             (Point::new(10.0, 0.0), (5, 10)),
