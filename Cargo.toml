@@ -1,10 +1,13 @@
 [package]
 name = "realtime_termgraph"
+description = "A realtime plotting library that outputs a graph to the terminal"
 version = "0.1.0"
 edition = "2021"
 authors = ["Grant Lemons <grantlemons@aol.com>"]
+license = "GPL-3.0"
+repository = "https://github.com/grantlemons/realtime_termgraph"
 
 [dependencies]
 crossterm = "0.26.1"
-map-range = "0.1.1"
+map-range = "0.1.2"
 parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
