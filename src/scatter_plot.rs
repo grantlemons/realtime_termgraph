@@ -10,17 +10,8 @@ use super::Point;
 pub struct ScatterPlot {
     points: Arc<Mutex<Vec<Point>>>,
     canvas: Arc<Canvas>,
-    stream_handle: Option<thread::JoinHandle<()>>,
+    streams: Arc<Mutex<Vec<Receiver<Point>>>>,
 }
-
-// impl Drop for ScatterPlot {
-//     fn drop(&mut self) {
-//         if self.stream_handle.is_some() {
-//             self.stream_handle.join().unwrap();
-//         }
-//         self.refresh()
-//     }
-// }
 
 impl ScatterPlot {
     pub fn new(canvas: Canvas) -> Self {
@@ -30,11 +21,67 @@ impl ScatterPlot {
         }
     }
 
-    pub fn new_with_stream(canvas: Canvas, rx: Receiver<Point>) -> Self {
+    pub fn new_with_stream(
+        canvas: Canvas,
+        rx: Receiver<Point>,
+    ) -> (Self, Vec<thread::JoinHandle<()>>) {
         let mut plot = Self::new(canvas);
         plot.add_stream(rx);
 
-        plot
+        let update_handle = plot.auto_update();
+        let refresh_handle = plot.auto_refresh();
+
+        (plot, vec![update_handle, refresh_handle])
+    }
+
+    pub fn add_point(&mut self, point: Point) {
+        self.points.lock().push(point);
+    }
+
+    pub fn add_stream(&mut self, rx: Receiver<Point>) {
+        self.streams.lock().push(rx);
+    }
+
+    pub fn extend(&mut self, new_points: &[Point]) {
+        self.points.lock().extend(new_points.to_owned());
+    }
+
+    pub fn update(&mut self) {
+        let mut points = self.points.lock();
+
+        for stream in self.streams.lock().iter() {
+            for point in stream.try_iter() {
+                points.push(point);
+            }
+        }
+    }
+
+    pub fn auto_update(&mut self) -> thread::JoinHandle<()> {
+        use std::time::Duration;
+
+        const REFRESH_RATE_HZ: u64 = 120;
+        const REFRESH_PERIOD: Duration = Duration::from_millis(1000 / REFRESH_RATE_HZ);
+
+        let points_clone = Arc::clone(&self.points);
+        let streams_clone = Arc::clone(&self.streams);
+
+        thread::spawn(move || loop {
+            let mut points = points_clone.lock();
+
+            for stream in streams_clone.lock().iter() {
+                for point in stream.try_iter() {
+                    points.push(point);
+                }
+            }
+
+            drop(points); // drop lock in order to prevent holding lock while waiting
+            thread::sleep(REFRESH_PERIOD);
+        })
+    }
+
+    pub fn refresh(&self) {
+        let points = self.points.lock();
+        self.canvas.update(&points);
     }
 
     pub fn auto_refresh(&self) -> thread::JoinHandle<()> {
@@ -60,34 +107,6 @@ impl ScatterPlot {
             thread::sleep(REFRESH_PERIOD);
         })
     }
-
-    pub fn refresh(&self) {
-        let points = self.points.lock();
-        self.canvas.update(&points);
-    }
-
-    pub fn add_point(&mut self, point: Point) {
-        let mut points = self.points.lock();
-        points.push(point);
-    }
-
-    pub fn add_stream(&mut self, rx: Receiver<Point>) {
-        let points_clone = Arc::clone(&self.points);
-
-        let _handle = thread::spawn(move || {
-            for point in rx {
-                let mut points = points_clone.lock();
-                points.push(point);
-            }
-        });
-
-        // self.stream_handle = Some(handle);
-    }
-
-    pub fn extend(&mut self, new_points: &[Point]) {
-        let mut points = self.points.lock();
-        points.extend(new_points.to_owned());
-    }
 }
 
 #[cfg(test)]
@@ -97,12 +116,10 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
 
-    #[ignore]
     #[test]
     fn test_stream() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let plot = ScatterPlot::new_with_stream(Canvas::default(), rx);
-        plot.auto_refresh();
+        ScatterPlot::new_with_stream(Canvas::default(), rx);
 
         for (x, y) in [(534, 234), (5423, 9856), (243342, 443), (2321, 43534)] {
             tx.send(Point::new(x as f32, y as f32)).unwrap();

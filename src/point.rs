@@ -13,6 +13,12 @@ impl<T: From<f32>, U: From<f32>> From<&Point> for (T, U) {
     }
 }
 
+impl std::fmt::Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+
 impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Point(x, y)

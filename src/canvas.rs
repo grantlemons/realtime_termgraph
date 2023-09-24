@@ -77,7 +77,7 @@ impl Default for Canvas {
             dimensions: (20, 10),
             x_bounds: -10.0..=10.0,
             y_bounds: -10.0..=10.0,
-            start_row: cursor::position().unwrap().1,
+            start_row: cursor::position().unwrap_or((0, 0)).1,
         }
     }
 }
