@@ -198,7 +198,7 @@ pub fn char_at_position(row: u16, column: u16, char: char) -> Result<(), std::io
 
     stdout.queue(cursor::MoveTo(column, row))?;
 
-    stdout.write(&[char as u8])?;
+    stdout.write_all(&[char as u8])?;
 
     stdout.flush()?;
 
