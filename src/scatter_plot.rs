@@ -1,4 +1,5 @@
 use parking_lot::Mutex;
+use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
@@ -21,17 +22,12 @@ impl ScatterPlot {
         }
     }
 
-    pub fn new_with_stream(
-        canvas: Canvas,
-        rx: Receiver<Point>,
-    ) -> (Self, Vec<thread::JoinHandle<()>>) {
+    pub fn new_with_stream(canvas: Canvas, rx: Receiver<Point>) -> (Self, thread::JoinHandle<()>) {
         let mut plot = Self::new(canvas);
         plot.add_stream(rx);
 
-        let update_handle = plot.auto_update();
         let refresh_handle = plot.auto_refresh();
-
-        (plot, vec![update_handle, refresh_handle])
+        (plot, refresh_handle)
     }
 
     pub fn add_point(&mut self, point: Point) {
@@ -54,29 +50,8 @@ impl ScatterPlot {
                 points.push(point);
             }
         }
-    }
 
-    pub fn auto_update(&mut self) -> thread::JoinHandle<()> {
-        use std::time::Duration;
-
-        const REFRESH_RATE_HZ: u64 = 120;
-        const REFRESH_PERIOD: Duration = Duration::from_millis(1000 / REFRESH_RATE_HZ);
-
-        let points_clone = Arc::clone(&self.points);
-        let streams_clone = Arc::clone(&self.streams);
-
-        thread::spawn(move || loop {
-            let mut points = points_clone.lock();
-
-            for stream in streams_clone.lock().iter() {
-                for point in stream.try_iter() {
-                    points.push(point);
-                }
-            }
-
-            drop(points); // drop lock in order to prevent holding lock while waiting
-            thread::sleep(REFRESH_PERIOD);
-        })
+        self.refresh();
     }
 
     pub fn refresh(&self) {
@@ -87,15 +62,25 @@ impl ScatterPlot {
     pub fn auto_refresh(&self) -> thread::JoinHandle<()> {
         use std::time::Duration;
 
-        const REFRESH_RATE_HZ: u64 = 120;
+        const REFRESH_RATE_HZ: u64 = 500;
         const REFRESH_PERIOD: Duration = Duration::from_millis(1000 / REFRESH_RATE_HZ);
 
         let points_clone = Arc::clone(&self.points);
         let canvas_clone = Arc::clone(&self.canvas);
+        let streams_clone = Arc::clone(&self.streams);
         let mut last_count = 0;
 
-        thread::spawn(move || loop {
-            let points = points_clone.lock();
+        thread::spawn(move || 'outer: loop {
+            let mut points = points_clone.lock();
+
+            for stream in streams_clone.lock().iter() {
+                for point in stream.try_iter() {
+                    points.push(point);
+                }
+                if let Some(mpsc::TryRecvError::Disconnected) = stream.try_recv().err() {
+                    break 'outer;
+                }
+            }
 
             let len = points.len();
             if points.len() != last_count {
