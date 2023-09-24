@@ -1,5 +1,5 @@
 [package]
-name = "rt_termgraph"
+name = "realtime_termgraph"
 version = "0.1.0"
 edition = "2021"
 authors = ["Grant Lemons <grantlemons@aol.com>"]

@@ -1,4 +1,4 @@
-use rt_termgraph::*;
+use realtime_termgraph::*;
 
 fn main() {
     use std::time::Duration;
@@ -7,11 +7,11 @@ fn main() {
         .bounds(-100.0..=100.0, -100.0..=100.0)
         .style('+', '#');
 
-    canvas.plot_point(&Point::new(0.0, 0.0));
-    canvas.plot_point(&Point::new(-100.0, 100.0));
-    canvas.plot_point(&Point::new(100.0, -100.0));
-    canvas.plot_point(&Point::new(-100.0, -100.0));
-    canvas.plot_point(&Point::new(100.0, 100.0));
+    // canvas.plot_point(&Point::new(0.0, 0.0));
+    // canvas.plot_point(&Point::new(-100.0, 100.0));
+    // canvas.plot_point(&Point::new(100.0, -100.0));
+    // canvas.plot_point(&Point::new(-100.0, -100.0));
+    // canvas.plot_point(&Point::new(100.0, 100.0));
 
     let (tx, rx) = std::sync::mpsc::channel();
     let (_, _) = ScatterPlot::new_with_stream(canvas, rx);
