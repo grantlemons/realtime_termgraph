@@ -14,9 +14,9 @@ use super::Point;
 
 #[derive(Clone)]
 pub struct Canvas {
-    dimensions: (u16, u16),
-    x_bounds: RangeInclusive<f32>,
-    y_bounds: RangeInclusive<f32>,
+    pub dimensions: (u16, u16),
+    pub x_bounds: RangeInclusive<f32>,
+    pub y_bounds: RangeInclusive<f32>,
     start_row: u16,
     marker: char,
     border_char: char,
