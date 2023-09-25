@@ -1,27 +1,24 @@
-use parking_lot::Mutex;
-use std::sync::Arc;
-
 use super::Canvas;
 use super::Point;
 
 #[derive(Default)]
 pub struct ScatterPlot {
-    points: Arc<Mutex<Vec<Point>>>,
-    canvas: Arc<Canvas>,
+    points: Vec<Point>,
+    canvas: Canvas,
     callback: Option<fn(&Self)>,
 }
 
 impl ScatterPlot {
     pub fn new(canvas: Canvas) -> Self {
         Self {
-            canvas: Arc::new(canvas),
+            canvas,
             ..Self::default()
         }
     }
 
     pub fn new_with_points(canvas: Canvas, points: Vec<Point>) -> Self {
         Self {
-            points: Arc::new(Mutex::new(points)),
+            points,
             ..Self::new(canvas)
         }
     }
@@ -34,11 +31,11 @@ impl ScatterPlot {
     }
 
     pub fn points(&self) -> Vec<Point> {
-        self.points.lock().clone()
+        self.points.clone()
     }
 
     pub fn add_point(&mut self, point: Point) {
-        self.points.lock().push(point);
+        self.points.push(point);
         self.canvas.plot_point(&point);
 
         if let Some(callback) = self.callback {
@@ -47,7 +44,7 @@ impl ScatterPlot {
     }
 
     pub fn extend(&mut self, new_points: &[Point]) {
-        self.points.lock().extend(new_points.to_owned());
+        self.points.extend(new_points.to_owned());
         self.canvas.plot_points(new_points);
 
         if let Some(callback) = self.callback {
@@ -56,8 +53,7 @@ impl ScatterPlot {
     }
 
     pub fn refresh(&self) {
-        let points = self.points.lock();
-        self.canvas.plot_points(&points);
+        self.canvas.plot_points(&self.points);
     }
 }
 
